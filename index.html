@@ -1,0 +1,1086 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <!-- iOS Web App & Offline Optimization -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Pulse">
+  <meta name="format-detection" content="telephone=no">
+  <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'%3E%3Crect width='180' height='180' rx='40' fill='%23070708'/%3E%3Ccircle cx='90' cy='90' r='56' stroke='%23252930' stroke-width='6' fill='%23131518'/%3E%3Ccircle cx='90' cy='46' r='8' fill='%238f98a5'/%3E%3C/svg%3E">
+
+  <title>Pulse - 極簡黑灰節拍器</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            noir: {
+              950: '#070708',
+              900: '#0e0f11',
+              850: '#131518',
+              800: '#1a1d22',
+              700: '#252930',
+              600: '#343a44',
+              500: '#525b6a',
+              400: '#7e8898',
+              300: '#a6afbd',
+              200: '#d1d6de',
+              100: '#f1f3f5'
+            }
+          }
+        }
+      }
+    };
+  </script>
+  <style>
+    /* Prevent unwanted pull-to-refresh or accidental zoom on mobile */
+    body {
+      touch-action: manipulation;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-tap-highlight-color: transparent;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background-color: #070708;
+      color: #d1d6de;
+    }
+
+    /* Standalone Offline CSS Fallbacks for iOS Safari / Files app */
+    *, ::before, ::after { box-sizing: border-box; }
+    .bg-noir-950 { background-color: #070708; }
+    .bg-noir-900 { background-color: #0e0f11; }
+    .bg-noir-850 { background-color: #131518; }
+    .bg-noir-800 { background-color: #1a1d22; }
+    .bg-noir-700 { background-color: #252930; }
+    .bg-noir-200 { background-color: #d1d6de; }
+    .bg-noir-100 { background-color: #f1f3f5; }
+    .text-noir-100 { color: #f1f3f5; }
+    .text-noir-200 { color: #d1d6de; }
+    .text-noir-300 { color: #a6afbd; }
+    .text-noir-400 { color: #7e8898; }
+    .text-noir-500 { color: #525b6a; }
+    .text-noir-600 { color: #343a44; }
+    .text-noir-950 { color: #070708; }
+    .border-noir-700 { border-color: #252930; }
+    .border-noir-800 { border-color: #1a1d22; }
+    .border-noir-850 { border-color: #131518; }
+
+    /* Rotary Wheel Styling */
+    .dial-outer {
+      touch-action: none;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8), inset 0 1px 2px rgba(255, 255, 255, 0.05), inset 0 -4px 12px rgba(0,0,0,0.9);
+    }
+
+    .dial-inner {
+      box-shadow: 0 4px 18px rgba(0, 0, 0, 0.9), inset 0 2px 4px rgba(255, 255, 255, 0.03);
+    }
+
+    /* Subtle Beat Dot transitions */
+    .beat-dot {
+      transition: background-color 0.08s ease, border-color 0.08s ease, transform 0.08s ease, box-shadow 0.08s ease;
+    }
+    .beat-dot.active-normal {
+      background-color: #5c6470 !important;
+      border-color: #7b8593 !important;
+      transform: scale(1.08);
+      box-shadow: 0 0 8px rgba(120, 130, 145, 0.25);
+    }
+    .beat-dot.active-accent {
+      background-color: #8a94a2 !important;
+      border-color: #b2b9c3 !important;
+      transform: scale(1.12);
+      box-shadow: 0 0 10px rgba(160, 170, 185, 0.35);
+    }
+
+    /* Custom scrollbar for song list */
+    .song-list-scroll::-webkit-scrollbar {
+      width: 4px;
+    }
+    .song-list-scroll::-webkit-scrollbar-track {
+      background: #0e0f11;
+    }
+    .song-list-scroll::-webkit-scrollbar-thumb {
+      background: #252930;
+      border-radius: 2px;
+    }
+  </style>
+</head>
+<body class="min-h-screen bg-noir-950 text-noir-200 flex flex-col justify-between items-center select-none overflow-x-hidden antialiased">
+
+  <!-- Main Container (Mobile Screen Constrained) -->
+  <div class="w-full max-w-md mx-auto flex flex-col min-h-screen px-4 py-3 justify-between">
+
+    <!-- Top Bar: Song Preset Switcher & Quick Navigation -->
+    <header class="w-full pt-1 pb-2">
+      <!-- Quick Song Selector Bar -->
+      <div class="bg-noir-900 border border-noir-800 rounded-xl p-2.5 shadow-md flex items-center justify-between gap-2">
+        <button id="prevSongBtn" class="p-2 text-noir-400 hover:text-noir-100 hover:bg-noir-800 active:scale-95 rounded-lg transition" title="上一首">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/>
+          </svg>
+        </button>
+
+        <div id="currentSongDisplay" class="flex-1 text-center cursor-pointer py-1 px-2 rounded-lg hover:bg-noir-850 transition">
+          <div class="flex items-center justify-center gap-1.5 text-xs text-noir-400 font-mono tracking-wider">
+            <span id="currentSlotNumber">#01 / 50</span>
+            <span class="text-noir-600">•</span>
+            <span id="currentSongSignatureBadge">4/4</span>
+          </div>
+          <div id="currentSongTitle" class="text-sm font-medium text-noir-100 truncate max-w-[180px] mx-auto mt-0.5">
+            曲目 1
+          </div>
+        </div>
+
+        <button id="nextSongBtn" class="p-2 text-noir-400 hover:text-noir-100 hover:bg-noir-800 active:scale-95 rounded-lg transition" title="下一首">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/>
+          </svg>
+        </button>
+
+        <!-- Song Library Trigger Button -->
+        <button id="openLibraryBtn" class="p-2 text-noir-400 hover:text-noir-100 hover:bg-noir-800 active:scale-95 rounded-lg transition border-l border-noir-800 pl-2.5" title="打開50組記憶清單">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16"/>
+          </svg>
+        </button>
+      </div>
+
+      <!-- Quick Preset Actions (Save & Rename Current) -->
+      <div class="flex items-center justify-between text-xs text-noir-400 px-2 mt-1.5">
+        <button id="quickSaveBtn" class="flex items-center gap-1 hover:text-noir-200 transition py-0.5 active:opacity-75">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"/>
+          </svg>
+          <span>儲存當前設定至此首</span>
+        </button>
+        <button id="editSongBtn" class="hover:text-noir-200 transition py-0.5 active:opacity-75">
+          編輯名稱
+        </button>
+      </div>
+    </header>
+
+    <!-- Subtle Beat Visualizer (Small Gray Dots - Non-distracting) -->
+    <section class="w-full flex flex-col items-center justify-center my-2">
+      <!-- Minimal subtle gray dots container -->
+      <div id="beatDotsContainer" class="flex items-center justify-center gap-3.5 py-2.5 px-5 rounded-full bg-noir-900/60 border border-noir-850/80">
+        <!-- Rendered dynamically via JS -->
+      </div>
+      <div class="text-[11px] font-mono text-noir-500 mt-1 tracking-widest uppercase">
+        <span id="tempoTerm">Andante</span>
+      </div>
+    </section>
+
+    <!-- Interactive Rotary Dial & Central Display -->
+    <section class="flex flex-col items-center justify-center relative my-1">
+      
+      <!-- Outer Dial Control Area -->
+      <div id="dialOuter" class="dial-outer relative w-64 h-64 sm:w-72 sm:h-72 rounded-full bg-gradient-to-b from-noir-800 via-noir-900 to-noir-950 border border-noir-700/60 flex items-center justify-center cursor-grab active:cursor-grabbing">
+        
+        <!-- Rotating SVG Tick Ring (Rotates as dial is turned) -->
+        <svg id="dialTicksSvg" class="absolute inset-0 w-full h-full pointer-events-none transition-transform duration-75" viewBox="0 0 280 280">
+          <g id="dialTicksGroup" stroke="#343a44" stroke-width="1.5" stroke-linecap="round">
+            <!-- Ticks generated dynamically via JS -->
+          </g>
+          <!-- Active Position Indicator Dot on Ring -->
+          <circle id="dialKnobDot" cx="140" cy="22" r="4.5" fill="#8f98a5" opacity="0.9" />
+        </svg>
+
+        <!-- Center Display (Non-rotating inner circle - Stealth & Compact) -->
+        <div class="dial-inner relative w-44 h-44 sm:w-48 sm:h-48 rounded-full bg-noir-900 border border-noir-800 flex flex-col items-center justify-center pointer-events-auto z-10">
+          
+          <!-- Discreet BPM Display (Smaller, low-key) -->
+          <div class="flex items-baseline justify-center gap-1">
+            <span id="bpmDisplay" class="text-2xl sm:text-3xl font-light tracking-wider text-noir-300 font-mono">75</span>
+            <span class="text-[11px] text-noir-600 font-mono">bpm</span>
+          </div>
+
+          <!-- Subtle stealth ring mark -->
+          <div class="w-1.5 h-1.5 rounded-full bg-noir-700 mt-2 opacity-60"></div>
+        </div>
+
+      </div>
+
+      <!-- Quick Step Adjustment Controls below the Dial -->
+      <div class="flex items-center justify-center gap-2 mt-4 w-full max-w-xs">
+        <button id="stepMinus5" class="px-2.5 py-1.5 text-xs font-mono bg-noir-900 border border-noir-800 hover:border-noir-700 text-noir-400 hover:text-noir-200 rounded-lg active:scale-95 transition" title="減5拍">-5</button>
+        <button id="stepMinus1" class="px-3.5 py-1.5 text-xs font-mono bg-noir-900 border border-noir-800 hover:border-noir-700 text-noir-300 hover:text-noir-100 rounded-lg active:scale-95 transition" title="減1拍">-1</button>
+        
+        <!-- TAP Tempo Button -->
+        <button id="tapTempoBtn" class="flex-1 py-1.5 px-3 text-xs font-mono font-medium tracking-wide bg-noir-850 border border-noir-700 hover:bg-noir-800 text-noir-200 hover:text-white rounded-lg active:scale-95 transition flex items-center justify-center gap-1.5 shadow-sm">
+          <span>TAP 測速</span>
+        </button>
+
+        <button id="stepPlus1" class="px-3.5 py-1.5 text-xs font-mono bg-noir-900 border border-noir-800 hover:border-noir-700 text-noir-300 hover:text-noir-100 rounded-lg active:scale-95 transition" title="加1拍">+1</button>
+        <button id="stepPlus5" class="px-2.5 py-1.5 text-xs font-mono bg-noir-900 border border-noir-800 hover:border-noir-700 text-noir-400 hover:text-noir-200 rounded-lg active:scale-95 transition" title="加5拍">+5</button>
+      </div>
+
+    </section>
+
+    <!-- Bottom Controls: Time Signature, Sound Settings & Large Play Button -->
+    <footer class="w-full flex flex-col gap-3 pb-4 pt-2">
+      
+      <!-- Time Signature & Sound Timbre Selector -->
+      <div class="grid grid-cols-2 gap-2 bg-noir-900/80 border border-noir-800/80 rounded-xl p-2.5 text-xs">
+        <!-- Beat Time Signature -->
+        <div class="flex items-center justify-between px-1">
+          <span class="text-noir-400 font-mono">拍號：</span>
+          <select id="timeSignatureSelect" class="bg-noir-850 text-noir-200 border border-noir-700 rounded-md px-2 py-1 text-xs focus:outline-none focus:border-noir-500 font-mono cursor-pointer">
+            <option value="1">1/4 (單音)</option>
+            <option value="2">2/4 拍</option>
+            <option value="3">3/4 拍 (華爾茲)</option>
+            <option value="4" selected>4/4 拍 (標準)</option>
+            <option value="5">5/4 拍</option>
+            <option value="6">6/8 拍</option>
+            <option value="7">7/8 拍</option>
+            <option value="8">8/8 拍</option>
+            <option value="12">12/8 拍</option>
+          </select>
+        </div>
+
+        <!-- Timbre / Sound Style -->
+        <div class="flex items-center justify-between px-1">
+          <span class="text-noir-400">音色：</span>
+          <select id="soundTimbreSelect" class="bg-noir-850 text-noir-200 border border-noir-700 rounded-md px-2 py-1 text-xs focus:outline-none focus:border-noir-500 cursor-pointer">
+            <option value="woodblock" selected>極簡木心 (柔和)</option>
+            <option value="digital">數位電子 (清晰)</option>
+            <option value="stick">清脆鼓棒 (穿透)</option>
+            <option value="mute">靜音 (純視覺)</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Volume & Main Play/Stop Button -->
+      <div class="flex items-center gap-3">
+        <!-- Volume Toggle -->
+        <div class="flex items-center gap-2 bg-noir-900 border border-noir-800 rounded-xl px-3 py-3 w-1/3">
+          <button id="muteToggleBtn" class="text-noir-400 hover:text-noir-200 transition" title="靜音切換">
+            <svg id="volumeIcon" class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"/>
+            </svg>
+          </button>
+          <input id="volumeSlider" type="range" min="0" max="1" step="0.05" value="0.8" class="w-full accent-noir-400 h-1 bg-noir-800 rounded-lg cursor-pointer">
+        </div>
+
+        <!-- Large Tactile Play / Stop Button -->
+        <button id="playToggleBtn" class="flex-1 bg-noir-100 hover:bg-white text-noir-950 font-medium py-3.5 px-6 rounded-xl flex items-center justify-center gap-2.5 active:scale-[0.98] transition shadow-lg">
+          <svg id="playIcon" class="w-5 h-5 fill-current" viewBox="0 0 24 24">
+            <path d="M8 5v14l11-7z"/>
+          </svg>
+          <svg id="pauseIcon" class="w-5 h-5 fill-current hidden" viewBox="0 0 24 24">
+            <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
+          </svg>
+          <span id="playButtonText" class="text-sm font-semibold tracking-wider font-mono">START</span>
+        </button>
+      </div>
+
+    </footer>
+
+  </div>
+
+  <!-- 50-Song Memory Drawer / Modal (Overlay) -->
+  <div id="libraryModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex flex-col justify-end transition-opacity duration-200 opacity-0 pointer-events-none">
+    <div id="libraryPanel" class="w-full max-w-md mx-auto bg-noir-900 border-t border-noir-700 rounded-t-2xl max-h-[85vh] flex flex-col shadow-2xl transform translate-y-full transition-transform duration-200">
+      
+      <!-- Drawer Header -->
+      <div class="p-4 border-b border-noir-800 flex items-center justify-between">
+        <div>
+          <h2 class="text-base font-medium text-noir-100">節奏記憶庫 (共 50 組)</h2>
+          <p class="text-xs text-noir-400">點擊任意曲目即可快速切換演奏節奏</p>
+        </div>
+        <button id="closeLibraryBtn" class="p-2 text-noir-400 hover:text-noir-100 rounded-lg hover:bg-noir-800 transition">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+
+      <!-- Quick Search / Filter Bar -->
+      <div class="px-4 py-2 border-b border-noir-800/80 bg-noir-850/50 flex items-center gap-2">
+        <svg class="w-4 h-4 text-noir-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+        </svg>
+        <input id="searchSongInput" type="text" placeholder="搜尋曲目編號或名稱..." class="bg-transparent text-xs text-noir-200 placeholder-noir-500 focus:outline-none w-full">
+        <button id="clearSearchBtn" class="text-xs text-noir-500 hover:text-noir-300 hidden">清除</button>
+      </div>
+
+      <!-- 50 Song Items List -->
+      <div id="songListContainer" class="song-list-scroll flex-1 overflow-y-auto divide-y divide-noir-800/60 p-2 space-y-1">
+        <!-- Rendered dynamically via JS (50 items) -->
+      </div>
+
+      <!-- Drawer Footer Actions -->
+      <div class="p-3 border-t border-noir-800 bg-noir-900 flex items-center justify-between text-xs text-noir-400">
+        <button id="resetAllSongsBtn" class="hover:text-red-400 transition py-1">
+          重設所有記憶
+        </button>
+        <span class="text-noir-500">已自動儲存至瀏覽器</span>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Rename Song In-Page Modal (No alert/prompt) -->
+  <div id="renameModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 opacity-0 pointer-events-none transition-opacity duration-150">
+    <div class="bg-noir-900 border border-noir-700 rounded-xl p-5 w-full max-w-xs shadow-2xl space-y-4">
+      <h3 class="text-sm font-medium text-noir-100">修改曲目名稱</h3>
+      <input id="renameInput" type="text" maxlength="30" class="w-full bg-noir-950 border border-noir-700 rounded-lg px-3 py-2 text-sm text-noir-100 focus:outline-none focus:border-noir-400" placeholder="輸入歌曲名稱...">
+      <div class="flex items-center justify-end gap-2 text-xs">
+        <button id="cancelRenameBtn" class="px-3 py-1.5 rounded-lg bg-noir-800 text-noir-300 hover:bg-noir-700 transition">取消</button>
+        <button id="confirmRenameBtn" class="px-3 py-1.5 rounded-lg bg-noir-200 text-noir-950 font-medium hover:bg-white transition">儲存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification (In-page notice) -->
+  <div id="toast" class="fixed bottom-20 left-1/2 -translate-x-1/2 bg-noir-800 border border-noir-700 text-noir-200 text-xs px-4 py-2 rounded-full shadow-xl opacity-0 pointer-events-none transition-opacity duration-200 z-50 flex items-center gap-1.5">
+    <span id="toastMessage">已儲存</span>
+  </div>
+
+  <!-- Main JavaScript Logic -->
+  <script>
+    (function() {
+      // --- Constants & Config ---
+      const TOTAL_SLOTS = 50;
+      const MIN_BPM = 30;
+      const MAX_BPM = 280;
+      const STORAGE_KEY = 'minimal_metronome_presets_v2';
+
+      // --- Italian Tempo Terms ---
+      function getTempoTerm(bpm) {
+        if (bpm < 40) return 'Grave';
+        if (bpm < 55) return 'Largo';
+        if (bpm < 66) return 'Adagio';
+        if (bpm < 76) return 'Andante';
+        if (bpm < 108) return 'Moderato';
+        if (bpm < 120) return 'Allegretto';
+        if (bpm < 156) return 'Allegro';
+        if (bpm < 176) return 'Vivace';
+        if (bpm < 200) return 'Presto';
+        return 'Prestissimo';
+      }
+
+      // --- Default Song Presets (User Defined 50 slots, all 4/4) ---
+      function generateDefaultPresets() {
+        const bpmList = [
+          75, 63, 84, 66, 138, 146, 61, 136, 88, 90,
+          66, 114, 86, 130, 92, 145, 88, 78, 72, 120,
+          94, 94, 90, 88, 94, 66,
+          // 27-48: 120
+          120, 120, 120, 120, 120, 120, 120, 120, 120, 120,
+          120, 120, 120, 120, 120, 120, 120, 120, 120, 120,
+          120, 120,
+          // 49, 50
+          96, 150
+        ];
+
+        const presets = [];
+        for (let i = 1; i <= TOTAL_SLOTS; i++) {
+          presets.push({
+            id: i,
+            title: `曲目 ${i}`,
+            bpm: bpmList[i - 1],
+            beatsPerBar: 4
+          });
+        }
+        return presets;
+      }
+
+      // --- Persistent State ---
+      let presets = [];
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) {
+          presets = JSON.parse(raw);
+          // Validate structure
+          if (!Array.isArray(presets) || presets.length !== TOTAL_SLOTS) {
+            presets = generateDefaultPresets();
+          }
+        } else {
+          presets = generateDefaultPresets();
+        }
+      } catch (e) {
+        presets = generateDefaultPresets();
+      }
+
+      function savePresetsToStorage() {
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(presets));
+        } catch (e) {
+          console.warn('LocalStorage save failed:', e);
+        }
+      }
+
+      // --- Application State ---
+      let currentSlotIndex = 0; // 0 to 49
+      let currentBpm = presets[0].bpm;
+      let beatsPerBar = presets[0].beatsPerBar;
+      let isPlaying = false;
+      let currentBeat = 0; // 0 to beatsPerBar - 1
+      let volume = 0.8;
+      let isMuted = false;
+      let soundTimbre = 'woodblock';
+
+      // Tap Tempo Tracker
+      let tapTimes = [];
+
+      // Audio Context & Lookahead Scheduler
+      let audioCtx = null;
+      let schedulerTimerId = null;
+      let nextNoteTime = 0.0;
+      const lookaheadMs = 25.0; // How frequently to call scheduling function
+      const scheduleAheadTime = 0.1; // How far ahead to schedule audio (sec)
+
+      // --- DOM Elements ---
+      const bpmDisplay = document.getElementById('bpmDisplay');
+      const tempoTerm = document.getElementById('tempoTerm');
+      const beatDotsContainer = document.getElementById('beatDotsContainer');
+      const dialOuter = document.getElementById('dialOuter');
+      const dialTicksGroup = document.getElementById('dialTicksGroup');
+      const dialKnobDot = document.getElementById('dialKnobDot');
+      const dialTicksSvg = document.getElementById('dialTicksSvg');
+
+      const prevSongBtn = document.getElementById('prevSongBtn');
+      const nextSongBtn = document.getElementById('nextSongBtn');
+      const currentSlotNumber = document.getElementById('currentSlotNumber');
+      const currentSongSignatureBadge = document.getElementById('currentSongSignatureBadge');
+      const currentSongTitle = document.getElementById('currentSongTitle');
+      const currentSongDisplay = document.getElementById('currentSongDisplay');
+
+      const quickSaveBtn = document.getElementById('quickSaveBtn');
+      const editSongBtn = document.getElementById('editSongBtn');
+      const openLibraryBtn = document.getElementById('openLibraryBtn');
+
+      const stepMinus5 = document.getElementById('stepMinus5');
+      const stepMinus1 = document.getElementById('stepMinus1');
+      const stepPlus1 = document.getElementById('stepPlus1');
+      const stepPlus5 = document.getElementById('stepPlus5');
+      const tapTempoBtn = document.getElementById('tapTempoBtn');
+
+      const timeSignatureSelect = document.getElementById('timeSignatureSelect');
+      const soundTimbreSelect = document.getElementById('soundTimbreSelect');
+      const muteToggleBtn = document.getElementById('muteToggleBtn');
+      const volumeIcon = document.getElementById('volumeIcon');
+      const volumeSlider = document.getElementById('volumeSlider');
+
+      const playToggleBtn = document.getElementById('playToggleBtn');
+      const playIcon = document.getElementById('playIcon');
+      const pauseIcon = document.getElementById('pauseIcon');
+      const playButtonText = document.getElementById('playButtonText');
+
+      // Modals
+      const libraryModal = document.getElementById('libraryModal');
+      const libraryPanel = document.getElementById('libraryPanel');
+      const closeLibraryBtn = document.getElementById('closeLibraryBtn');
+      const songListContainer = document.getElementById('songListContainer');
+      const searchSongInput = document.getElementById('searchSongInput');
+      const clearSearchBtn = document.getElementById('clearSearchBtn');
+      const resetAllSongsBtn = document.getElementById('resetAllSongsBtn');
+
+      const renameModal = document.getElementById('renameModal');
+      const renameInput = document.getElementById('renameInput');
+      const cancelRenameBtn = document.getElementById('cancelRenameBtn');
+      const confirmRenameBtn = document.getElementById('confirmRenameBtn');
+
+      const toast = document.getElementById('toast');
+      const toastMessage = document.getElementById('toastMessage');
+
+      let toastTimer = null;
+      function showToast(msg) {
+        if (toastTimer) clearTimeout(toastTimer);
+        toastMessage.textContent = msg;
+        toast.classList.remove('opacity-0', 'pointer-events-none');
+        toastTimer = setTimeout(() => {
+          toast.classList.add('opacity-0', 'pointer-events-none');
+        }, 1800);
+      }
+
+      // --- Generate Dial SVG Ticks ---
+      function initDialTicks() {
+        const cx = 140;
+        const cy = 140;
+        const rOuter = 132;
+        const totalTicks = 60; // 60 ticks around the wheel
+        let svgHtml = '';
+
+        for (let i = 0; i < totalTicks; i++) {
+          const angle = (i * 360 / totalTicks) * (Math.PI / 180);
+          const isMajor = i % 5 === 0;
+          const tickLen = isMajor ? 8 : 4;
+          const rInner = rOuter - tickLen;
+
+          const x1 = cx + rOuter * Math.sin(angle);
+          const y1 = cy - rOuter * Math.cos(angle);
+          const x2 = cx + rInner * Math.sin(angle);
+          const y2 = cy - rInner * Math.cos(angle);
+
+          const strokeColor = isMajor ? '#525b6a' : '#252930';
+          const strokeWidth = isMajor ? 2 : 1.2;
+
+          svgHtml += `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="${strokeColor}" stroke-width="${strokeWidth}" />`;
+        }
+        dialTicksGroup.innerHTML = svgHtml;
+      }
+
+      // --- Update Visuals ---
+      function renderBeatDots() {
+        let dotsHtml = '';
+        for (let i = 0; i < beatsPerBar; i++) {
+          dotsHtml += `<div id="beat-dot-${i}" class="beat-dot w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-noir-850 border border-noir-700/70"></div>`;
+        }
+        beatDotsContainer.innerHTML = dotsHtml;
+      }
+
+      function updateUI() {
+        bpmDisplay.textContent = currentBpm;
+        tempoTerm.textContent = getTempoTerm(currentBpm);
+
+        // Update Dial Rotation (Visual position)
+        // Map BPM [30, 280] to angle [0, 360]
+        const dialAngle = ((currentBpm - MIN_BPM) / (MAX_BPM - MIN_BPM)) * 300 - 150;
+        dialTicksSvg.style.transform = `rotate(${dialAngle}deg)`;
+
+        // Header Song Display
+        const song = presets[currentSlotIndex];
+        currentSlotNumber.textContent = `#${String(currentSlotIndex + 1).padStart(2, '0')} / ${TOTAL_SLOTS}`;
+        currentSongSignatureBadge.textContent = `${beatsPerBar}/4`;
+        currentSongTitle.textContent = song.title;
+
+        // Signature Select
+        timeSignatureSelect.value = String(beatsPerBar);
+      }
+
+      function setBpm(val) {
+        val = Math.max(MIN_BPM, Math.min(MAX_BPM, Math.round(val)));
+        if (currentBpm !== val) {
+          currentBpm = val;
+          updateUI();
+        }
+      }
+
+      // --- Web Audio Metronome Engine ---
+      function initAudio() {
+        if (!audioCtx) {
+          const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+          if (AudioContextClass) {
+            audioCtx = new AudioContextClass();
+          }
+        }
+        if (audioCtx && audioCtx.state === 'suspended') {
+          audioCtx.resume();
+        }
+      }
+
+      function playClickAtTime(time, isAccent) {
+        if (!audioCtx || isMuted || soundTimbre === 'mute') return;
+
+        const effectiveVol = volume;
+        if (effectiveVol <= 0.001) return;
+
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+
+        const accentGain = isAccent ? 1.0 : 0.65;
+        const peakGain = effectiveVol * accentGain;
+
+        if (soundTimbre === 'woodblock') {
+          // Warm soft woodblock tone
+          const freq = isAccent ? 920 : 640;
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(freq, time);
+          osc.frequency.exponentialRampToValueAtTime(freq * 0.4, time + 0.035);
+
+          gain.gain.setValueAtTime(0.001, time);
+          gain.gain.linearRampToValueAtTime(peakGain, time + 0.002);
+          gain.gain.exponentialRampToValueAtTime(0.0001, time + 0.04);
+
+          osc.start(time);
+          osc.stop(time + 0.045);
+        } else if (soundTimbre === 'digital') {
+          // Clean digital electronic beep
+          const freq = isAccent ? 1320 : 880;
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(freq, time);
+
+          gain.gain.setValueAtTime(0.001, time);
+          gain.gain.linearRampToValueAtTime(peakGain, time + 0.001);
+          gain.gain.exponentialRampToValueAtTime(0.0001, time + 0.03);
+
+          osc.start(time);
+          osc.stop(time + 0.035);
+        } else if (soundTimbre === 'stick') {
+          // Snappy drum stick sound
+          const freq = isAccent ? 1600 : 1100;
+          osc.type = 'square';
+          osc.frequency.setValueAtTime(freq, time);
+          osc.frequency.exponentialRampToValueAtTime(200, time + 0.015);
+
+          gain.gain.setValueAtTime(0.001, time);
+          gain.gain.linearRampToValueAtTime(peakGain * 0.8, time + 0.001);
+          gain.gain.exponentialRampToValueAtTime(0.0001, time + 0.02);
+
+          osc.start(time);
+          osc.stop(time + 0.025);
+        }
+      }
+
+      function flashBeatDot(beatNum, isAccent) {
+        const dot = document.getElementById(`beat-dot-${beatNum}`);
+        if (!dot) return;
+
+        // Clear all others
+        const allDots = beatDotsContainer.querySelectorAll('.beat-dot');
+        allDots.forEach(d => {
+          d.classList.remove('active-normal', 'active-accent');
+        });
+
+        // Flash target dot
+        if (isAccent) {
+          dot.classList.add('active-accent');
+        } else {
+          dot.classList.add('active-normal');
+        }
+
+        setTimeout(() => {
+          dot.classList.remove('active-normal', 'active-accent');
+        }, 110);
+      }
+
+      function scheduleNextNotes() {
+        while (nextNoteTime < audioCtx.currentTime + scheduleAheadTime) {
+          const isAccent = (currentBeat === 0 && beatsPerBar > 1);
+
+          // Audio Click
+          playClickAtTime(nextNoteTime, isAccent);
+
+          // Visual Flash (dispatched synchronously or with small timeout)
+          const delayMs = Math.max(0, (nextNoteTime - audioCtx.currentTime) * 1000);
+          const beatToFlash = currentBeat;
+          setTimeout(() => {
+            if (isPlaying) {
+              flashBeatDot(beatToFlash, isAccent);
+            }
+          }, delayMs);
+
+          // Advance beat
+          const secondsPerBeat = 60.0 / currentBpm;
+          nextNoteTime += secondsPerBeat;
+          currentBeat = (currentBeat + 1) % beatsPerBar;
+        }
+      }
+
+      function startMetronome() {
+        initAudio();
+        if (isPlaying) return;
+
+        isPlaying = true;
+        currentBeat = 0;
+        nextNoteTime = audioCtx.currentTime + 0.05;
+
+        playIcon.classList.add('hidden');
+        pauseIcon.classList.remove('hidden');
+        playButtonText.textContent = 'STOP';
+        playToggleBtn.classList.remove('bg-noir-100', 'text-noir-950');
+        playToggleBtn.classList.add('bg-noir-700', 'text-noir-100');
+
+        schedulerTimerId = setInterval(scheduleNextNotes, lookaheadMs);
+      }
+
+      function stopMetronome() {
+        if (!isPlaying) return;
+        isPlaying = false;
+        if (schedulerTimerId) {
+          clearInterval(schedulerTimerId);
+          schedulerTimerId = null;
+        }
+
+        playIcon.classList.remove('hidden');
+        pauseIcon.classList.add('hidden');
+        playButtonText.textContent = 'START';
+        playToggleBtn.classList.remove('bg-noir-700', 'text-noir-100');
+        playToggleBtn.classList.add('bg-noir-100', 'text-noir-950');
+
+        // Clear active dots
+        const allDots = beatDotsContainer.querySelectorAll('.beat-dot');
+        allDots.forEach(d => d.classList.remove('active-normal', 'active-accent'));
+      }
+
+      function togglePlay() {
+        if (isPlaying) {
+          stopMetronome();
+        } else {
+          startMetronome();
+        }
+      }
+
+      // --- Rotary Dial Interactive Physics ---
+      let isDragging = false;
+      let lastAngle = null;
+
+      function getAngleFromEvent(e) {
+        const rect = dialOuter.getBoundingClientRect();
+        const centerX = rect.left + rect.width / 2;
+        const centerY = rect.top + rect.height / 2;
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+        const deltaX = clientX - centerX;
+        const deltaY = clientY - centerY;
+        // Invert Y so up is positive
+        let rad = Math.atan2(deltaY, deltaX);
+        let deg = rad * (180 / Math.PI);
+        return deg;
+      }
+
+      function onDialStart(e) {
+        // Prevent default only if touch, prevent page scrolling
+        if (e.touches) e.preventDefault();
+        initAudio();
+        isDragging = true;
+        lastAngle = getAngleFromEvent(e);
+      }
+
+      function onDialMove(e) {
+        if (!isDragging) return;
+        if (e.touches) e.preventDefault();
+
+        const currentAngle = getAngleFromEvent(e);
+        let delta = currentAngle - lastAngle;
+
+        // Wrap around boundary -180/180
+        if (delta > 180) delta -= 360;
+        if (delta < -180) delta += 360;
+
+        // Sensitivity: ~3.5 degrees rotation = 1 BPM
+        const bpmStep = delta / 3.2;
+        if (Math.abs(bpmStep) >= 0.5) {
+          setBpm(currentBpm + bpmStep);
+          lastAngle = currentAngle;
+        }
+      }
+
+      function onDialEnd() {
+        isDragging = false;
+        lastAngle = null;
+      }
+
+      // Mouse and Touch bindings on Dial
+      dialOuter.addEventListener('mousedown', onDialStart);
+      window.addEventListener('mousemove', onDialMove);
+      window.addEventListener('mouseup', onDialEnd);
+
+      dialOuter.addEventListener('touchstart', onDialStart, { passive: false });
+      window.addEventListener('touchmove', onDialMove, { passive: false });
+      window.addEventListener('touchend', onDialEnd);
+      window.addEventListener('touchcancel', onDialEnd);
+
+      // Mouse Wheel on Dial
+      dialOuter.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        initAudio();
+        const delta = e.deltaY < 0 ? 1 : -1;
+        setBpm(currentBpm + delta);
+      }, { passive: false });
+
+      // --- Tap Tempo Logic ---
+      function handleTapTempo() {
+        initAudio();
+        const now = performance.now();
+        // Reset if interval > 2.5 seconds
+        if (tapTimes.length > 0 && (now - tapTimes[tapTimes.length - 1] > 2500)) {
+          tapTimes = [];
+        }
+
+        tapTimes.push(now);
+        if (tapTimes.length > 5) tapTimes.shift();
+
+        if (tapTimes.length >= 2) {
+          let intervals = [];
+          for (let i = 1; i < tapTimes.length; i++) {
+            intervals.push(tapTimes[i] - tapTimes[i - 1]);
+          }
+          const avgInterval = intervals.reduce((a, b) => a + b, 0) / intervals.length;
+          const calculatedBpm = Math.round(60000 / avgInterval);
+          setBpm(calculatedBpm);
+          showToast(`TAP: ${calculatedBpm} BPM`);
+        } else {
+          showToast('再點擊一次以計算節奏');
+        }
+      }
+
+      // --- Song Preset Switching & Management ---
+      function loadSlot(index) {
+        if (index < 0 || index >= TOTAL_SLOTS) return;
+        currentSlotIndex = index;
+        const song = presets[currentSlotIndex];
+
+        currentBpm = song.bpm;
+        beatsPerBar = song.beatsPerBar;
+        timeSignatureSelect.value = String(beatsPerBar);
+
+        renderBeatDots();
+        updateUI();
+
+        // If playing, reset beat position to 1 for seamless groove
+        if (isPlaying && audioCtx) {
+          currentBeat = 0;
+          nextNoteTime = audioCtx.currentTime + 0.05;
+        }
+
+        showToast(`已切換至 #${String(index + 1).padStart(2, '0')} ${song.title}`);
+      }
+
+      function nextSong() {
+        const nextIdx = (currentSlotIndex + 1) % TOTAL_SLOTS;
+        loadSlot(nextIdx);
+      }
+
+      function prevSong() {
+        const prevIdx = (currentSlotIndex - 1 + TOTAL_SLOTS) % TOTAL_SLOTS;
+        loadSlot(prevIdx);
+      }
+
+      function saveCurrentToSlot() {
+        presets[currentSlotIndex].bpm = currentBpm;
+        presets[currentSlotIndex].beatsPerBar = beatsPerBar;
+        savePresetsToStorage();
+        renderSongList();
+        showToast(`已儲存 #${String(currentSlotIndex + 1).padStart(2, '0')} [${currentBpm} BPM, ${beatsPerBar}/4]`);
+      }
+
+      // --- Song Library Drawer & Filtering ---
+      function renderSongList(filterText = '') {
+        const query = filterText.trim().toLowerCase();
+        let listHtml = '';
+
+        presets.forEach((song, idx) => {
+          const slotNumStr = String(idx + 1).padStart(2, '0');
+          const isCurrent = idx === currentSlotIndex;
+
+          if (query) {
+            const matchNum = slotNumStr.includes(query);
+            const matchTitle = song.title.toLowerCase().includes(query);
+            if (!matchNum && !matchTitle) return;
+          }
+
+          listHtml += `
+            <div data-slot-index="${idx}" class="song-item flex items-center justify-between p-2.5 rounded-lg cursor-pointer transition ${isCurrent ? 'bg-noir-800 border border-noir-700/80 text-white' : 'hover:bg-noir-850 text-noir-300'}">
+              <div class="flex items-center gap-3 truncate">
+                <span class="text-xs font-mono ${isCurrent ? 'text-noir-100 font-bold' : 'text-noir-500'} w-6">#${slotNumStr}</span>
+                <span class="text-sm truncate font-medium">${song.title}</span>
+              </div>
+              <div class="flex items-center gap-2 font-mono text-xs text-noir-400">
+                <span class="bg-noir-950 px-2 py-0.5 rounded border border-noir-800">${song.beatsPerBar}/4</span>
+                <span class="bg-noir-950 px-2 py-0.5 rounded border border-noir-800 text-noir-200 font-semibold">${song.bpm} BPM</span>
+              </div>
+            </div>
+          `;
+        });
+
+        if (listHtml === '') {
+          listHtml = `<div class="p-8 text-center text-xs text-noir-500">無符合「${filterText}」的曲目</div>`;
+        }
+
+        songListContainer.innerHTML = listHtml;
+
+        // Attach click listeners to items
+        const items = songListContainer.querySelectorAll('.song-item');
+        items.forEach(item => {
+          item.addEventListener('click', () => {
+            const targetIdx = parseInt(item.getAttribute('data-slot-index'), 10);
+            loadSlot(targetIdx);
+            closeLibrary();
+          });
+        });
+      }
+
+      function openLibrary() {
+        renderSongList(searchSongInput.value);
+        libraryModal.classList.remove('opacity-0', 'pointer-events-none');
+        libraryPanel.classList.remove('translate-y-full');
+      }
+
+      function closeLibrary() {
+        libraryPanel.classList.add('translate-y-full');
+        libraryModal.classList.add('opacity-0');
+        setTimeout(() => {
+          libraryModal.classList.add('pointer-events-none');
+        }, 200);
+      }
+
+      // --- In-Page Rename Modal ---
+      function openRenameModal() {
+        renameInput.value = presets[currentSlotIndex].title;
+        renameModal.classList.remove('opacity-0', 'pointer-events-none');
+        renameInput.focus();
+      }
+
+      function closeRenameModal() {
+        renameModal.classList.add('opacity-0', 'pointer-events-none');
+      }
+
+      function confirmRename() {
+        const newTitle = renameInput.value.trim();
+        if (newTitle) {
+          presets[currentSlotIndex].title = newTitle;
+          savePresetsToStorage();
+          updateUI();
+          renderSongList(searchSongInput.value);
+          showToast('曲目名稱已更新');
+        }
+        closeRenameModal();
+      }
+
+      // --- Event Listeners Setup ---
+      function setupEventListeners() {
+        // Play / Stop
+        playToggleBtn.addEventListener('click', togglePlay);
+
+        // Header Navigation
+        prevSongBtn.addEventListener('click', prevSong);
+        nextSongBtn.addEventListener('click', nextSong);
+        currentSongDisplay.addEventListener('click', openLibrary);
+        openLibraryBtn.addEventListener('click', openLibrary);
+        quickSaveBtn.addEventListener('click', saveCurrentToSlot);
+        editSongBtn.addEventListener('click', openRenameModal);
+
+        // Quick Steppers
+        stepMinus5.addEventListener('click', () => { initAudio(); setBpm(currentBpm - 5); });
+        stepMinus1.addEventListener('click', () => { initAudio(); setBpm(currentBpm - 1); });
+        stepPlus1.addEventListener('click', () => { initAudio(); setBpm(currentBpm + 1); });
+        stepPlus5.addEventListener('click', () => { initAudio(); setBpm(currentBpm + 5); });
+
+        // Tap Tempo
+        tapTempoBtn.addEventListener('click', handleTapTempo);
+
+        // Time Signature Selector
+        timeSignatureSelect.addEventListener('change', (e) => {
+          beatsPerBar = parseInt(e.target.value, 10);
+          currentBeat = 0;
+          renderBeatDots();
+          updateUI();
+        });
+
+        // Sound Timbre Selector
+        soundTimbreSelect.addEventListener('change', (e) => {
+          soundTimbre = e.target.value;
+          initAudio();
+        });
+
+        // Volume & Mute
+        volumeSlider.addEventListener('input', (e) => {
+          volume = parseFloat(e.target.value);
+          isMuted = (volume === 0);
+          updateVolumeIcon();
+        });
+
+        muteToggleBtn.addEventListener('click', () => {
+          isMuted = !isMuted;
+          if (isMuted) {
+            volumeSlider.value = 0;
+          } else {
+            if (volume === 0) volume = 0.8;
+            volumeSlider.value = volume;
+          }
+          updateVolumeIcon();
+          showToast(isMuted ? '已靜音' : '音效開啟');
+        });
+
+        function updateVolumeIcon() {
+          if (isMuted || volume === 0) {
+            volumeIcon.innerHTML = `<path stroke-linecap="round" stroke-linejoin="round" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2"/>`;
+          } else {
+            volumeIcon.innerHTML = `<path stroke-linecap="round" stroke-linejoin="round" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"/>`;
+          }
+        }
+
+        // Library Drawer Controls
+        closeLibraryBtn.addEventListener('click', closeLibrary);
+        libraryModal.addEventListener('click', (e) => {
+          if (e.target === libraryModal) closeLibrary();
+        });
+
+        searchSongInput.addEventListener('input', (e) => {
+          const val = e.target.value;
+          clearSearchBtn.classList.toggle('hidden', val.length === 0);
+          renderSongList(val);
+        });
+
+        clearSearchBtn.addEventListener('click', () => {
+          searchSongInput.value = '';
+          clearSearchBtn.classList.add('hidden');
+          renderSongList('');
+        });
+
+        resetAllSongsBtn.addEventListener('click', () => {
+          presets = generateDefaultPresets();
+          savePresetsToStorage();
+          loadSlot(0);
+          renderSongList();
+          showToast('已還原為 50 組預設歌曲');
+        });
+
+        // Rename Modal Controls
+        cancelRenameBtn.addEventListener('click', closeRenameModal);
+        confirmRenameBtn.addEventListener('click', confirmRename);
+        renameInput.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') confirmRename();
+          if (e.key === 'Escape') closeRenameModal();
+        });
+
+        // Keyboard Shortcuts (Space for Play/Stop, Arrow Up/Down for BPM, Arrow Left/Right for Songs)
+        window.addEventListener('keydown', (e) => {
+          if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+          if (e.code === 'Space') {
+            e.preventDefault();
+            togglePlay();
+          } else if (e.code === 'ArrowUp') {
+            e.preventDefault();
+            setBpm(currentBpm + 1);
+          } else if (e.code === 'ArrowDown') {
+            e.preventDefault();
+            setBpm(currentBpm - 1);
+          } else if (e.code === 'ArrowRight') {
+            e.preventDefault();
+            nextSong();
+          } else if (e.code === 'ArrowLeft') {
+            e.preventDefault();
+            prevSong();
+          }
+        });
+      }
+
+      // --- Initialization ---
+      
+      // iOS Audio Unlock on first touch/click anywhere
+      const unlockAudio = () => {
+        initAudio();
+        window.removeEventListener('touchstart', unlockAudio);
+        window.removeEventListener('click', unlockAudio);
+      };
+      window.addEventListener('touchstart', unlockAudio, { passive: true });
+      window.addEventListener('click', unlockAudio);
+
+      function init() {
+        initDialTicks();
+        renderBeatDots();
+        updateUI();
+        setupEventListeners();
+      }
+
+      // Run on DOM load
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+      } else {
+        init();
+      }
+
+    })();
+  </script>
+</body>
+</html>
